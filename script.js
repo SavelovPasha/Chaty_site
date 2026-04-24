@@ -157,6 +157,58 @@ function formatPhoneValue(value) {
   return result;
 }
 
+function getNormalizedPhoneDigits(value) {
+  const digits = value.replace(/\D/g, "");
+
+  if (!digits.length) {
+    return "";
+  }
+
+  if (digits.startsWith("8")) {
+    return ("7" + digits.slice(1)).slice(0, 11);
+  }
+
+  if (digits.startsWith("7")) {
+    return digits.slice(0, 11);
+  }
+
+  return ("7" + digits).slice(0, 11);
+}
+
+function isPhoneComplete(value) {
+  return getNormalizedPhoneDigits(value).length === 11;
+}
+
+function setFieldValidityState(field, isValid) {
+  if (!field) {
+    return;
+  }
+
+  field.setAttribute("aria-invalid", String(!isValid));
+}
+
+function validateOrderForm() {
+  const hasName = Boolean(orderName.value.trim());
+  const hasPhone = isPhoneComplete(orderPhone.value);
+
+  setFieldValidityState(orderName, hasName);
+  setFieldValidityState(orderPhone, hasPhone);
+
+  if (!hasName && !hasPhone) {
+    return "Заполните имя и телефон, чтобы оставить заявку.";
+  }
+
+  if (!hasName) {
+    return "Укажите имя, чтобы мы знали, как к вам обращаться.";
+  }
+
+  if (!hasPhone) {
+    return "Введите полный номер телефона в формате +7 999 123-45-67.";
+  }
+
+  return "";
+}
+
 function setPriceFilter(filter) {
   activeFilter = filter;
   tabs.forEach((tab) => {
@@ -236,14 +288,17 @@ orderPhone.addEventListener("focus", () => {
 
 orderPhone.addEventListener("input", () => {
   orderPhone.value = formatPhoneValue(orderPhone.value);
+  setFieldValidityState(orderPhone, isPhoneComplete(orderPhone.value));
   updateOrderMessage();
 });
 
 orderPhone.addEventListener("blur", () => {
   if (orderPhone.value.trim() === "+7") {
     orderPhone.value = "";
-    updateOrderMessage();
   }
+
+  setFieldValidityState(orderPhone, !orderPhone.value.trim() || isPhoneComplete(orderPhone.value));
+  updateOrderMessage();
 });
 
 serviceCards.forEach((card) => {
@@ -283,6 +338,10 @@ function updateOrderMessage(clearStatus = true) {
   field.addEventListener("input", updateOrderMessage);
 });
 
+orderName.addEventListener("input", () => {
+  setFieldValidityState(orderName, Boolean(orderName.value.trim()));
+});
+
 orderService.addEventListener("input", () => {
   syncServiceChoiceButtons();
   updateOrderMessage();
@@ -308,10 +367,16 @@ function saveLead() {
 orderForm.addEventListener("submit", (event) => {
   event.preventDefault();
   copyStatus.classList.remove("error");
+  const validationMessage = validateOrderForm();
 
-  if (!orderName.value.trim() || !orderPhone.value.trim()) {
+  if (validationMessage) {
     copyStatus.classList.add("error");
-    copyStatus.textContent = "Заполните имя и телефон, чтобы оставить заявку.";
+    copyStatus.textContent = validationMessage;
+    if (!orderName.value.trim()) {
+      orderName.focus();
+    } else if (!isPhoneComplete(orderPhone.value)) {
+      orderPhone.focus();
+    }
     return;
   }
 
