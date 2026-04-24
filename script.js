@@ -1,6 +1,8 @@
-﻿const tabs = document.querySelectorAll(".tab");
+const tabs = document.querySelectorAll(".tab");
 const cards = document.querySelectorAll(".price-card");
 const serviceCards = document.querySelectorAll(".service-card[data-target-filter]");
+const navLinks = document.querySelectorAll('.nav a[href^="#"]');
+const pageSections = Array.from(document.querySelectorAll("main section[id]"));
 const searchInput = document.querySelector("#priceSearch");
 const actionMenus = document.querySelectorAll(".header-menu, .action-menu");
 const orderForm = document.querySelector("#orderForm");
@@ -81,10 +83,49 @@ function closeActionMenu(menu, { restoreFocus = false } = {}) {
   }
 }
 
+function getActionMenuItems(menu) {
+  return Array.from(
+    menu.querySelectorAll(".header-menu-dropdown a, .action-menu-dropdown a")
+  );
+}
+
+function openActionMenu(menu, { focusItem = false, focusLast = false } = {}) {
+  const toggle = menu.querySelector(".header-menu-toggle, .action-menu-toggle");
+  if (!toggle) {
+    return;
+  }
+
+  actionMenus.forEach((otherMenu) => {
+    if (otherMenu !== menu) {
+      closeActionMenu(otherMenu);
+    }
+  });
+
+  menu.classList.add("open");
+  toggle.setAttribute("aria-expanded", "true");
+
+  if (focusItem) {
+    const items = getActionMenuItems(menu);
+    const targetItem = focusLast ? items.at(-1) : items[0];
+    targetItem?.focus();
+  }
+}
+
+function moveActionMenuFocus(menu, currentItem, direction) {
+  const items = getActionMenuItems(menu);
+  if (!items.length) {
+    return;
+  }
+
+  const currentIndex = Math.max(items.indexOf(currentItem), 0);
+  const nextIndex = (currentIndex + direction + items.length) % items.length;
+  items[nextIndex].focus();
+}
+
 actionMenus.forEach((menu) => {
   const toggle = menu.querySelector(".header-menu-toggle, .action-menu-toggle");
   const dropdown = menu.querySelector(".header-menu-dropdown, .action-menu-dropdown");
-  const links = menu.querySelectorAll(".header-menu-dropdown a, .action-menu-dropdown a");
+  const links = getActionMenuItems(menu);
 
   if (!toggle) {
     return;
@@ -99,20 +140,60 @@ actionMenus.forEach((menu) => {
   }
 
   toggle.addEventListener("click", () => {
-    const isOpen = menu.classList.toggle("open");
-    toggle.setAttribute("aria-expanded", String(isOpen));
+    if (menu.classList.contains("open")) {
+      closeActionMenu(menu);
+      return;
+    }
 
-    actionMenus.forEach((otherMenu) => {
-      if (otherMenu !== menu) {
-        closeActionMenu(otherMenu);
-      }
-    });
+    openActionMenu(menu);
   });
 
   links.forEach((link) => {
     link.addEventListener("click", () => {
       closeActionMenu(menu);
     });
+
+    link.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        moveActionMenuFocus(menu, link, 1);
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        moveActionMenuFocus(menu, link, -1);
+      }
+
+      if (event.key === "Home") {
+        event.preventDefault();
+        links[0]?.focus();
+      }
+
+      if (event.key === "End") {
+        event.preventDefault();
+        links.at(-1)?.focus();
+      }
+
+      if (event.key === "Tab" && !event.shiftKey && link === links.at(-1)) {
+        closeActionMenu(menu);
+      }
+
+      if (event.key === "Tab" && event.shiftKey && link === links[0]) {
+        closeActionMenu(menu);
+      }
+    });
+  });
+
+  toggle.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openActionMenu(menu, { focusItem: true });
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      openActionMenu(menu, { focusItem: true, focusLast: true });
+    }
   });
 });
 
@@ -229,6 +310,7 @@ function setPriceFilter(filter) {
   activeFilter = filter;
   tabs.forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.filter === activeFilter);
+    tab.setAttribute("aria-pressed", String(tab.dataset.filter === activeFilter));
   });
   if (priceFilterStatus) {
     priceFilterStatus.textContent =
@@ -237,6 +319,27 @@ function setPriceFilter(filter) {
         : `Показаны цены по выбранной услуге: ${filterLabels[activeFilter] || "выбранный раздел"}.`;
   }
   applyFilters();
+}
+
+function updateCurrentNavSection() {
+  if (!navLinks.length || !pageSections.length) {
+    return;
+  }
+
+  const checkpoint = window.innerHeight * 0.28;
+  let currentSectionId = "";
+
+  pageSections.forEach((section) => {
+    const rect = section.getBoundingClientRect();
+    if (rect.top <= checkpoint && rect.bottom > checkpoint) {
+      currentSectionId = section.id;
+    }
+  });
+
+  navLinks.forEach((link) => {
+    const isCurrent = link.getAttribute("href") === `#${currentSectionId}`;
+    link.setAttribute("aria-current", isCurrent ? "location" : "false");
+  });
 }
 
 function selectOrderService(serviceName) {
@@ -364,6 +467,10 @@ orderService.addEventListener("input", () => {
 });
 
 syncServiceChoiceButtons();
+setPriceFilter(activeFilter);
+updateCurrentNavSection();
+window.addEventListener("scroll", updateCurrentNavSection, { passive: true });
+window.addEventListener("resize", updateCurrentNavSection);
 
 function saveLead() {
   const leads = JSON.parse(localStorage.getItem("fotochkaLeads") || "[]");
