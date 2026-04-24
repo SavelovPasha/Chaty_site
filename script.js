@@ -70,20 +70,32 @@ function updateMobileStickyVisibility() {
   mobileSticky.classList.toggle("is-visible", shouldShow);
 }
 
-function closeActionMenu(menu) {
+function closeActionMenu(menu, { restoreFocus = false } = {}) {
   menu.classList.remove("open");
   const toggle = menu.querySelector(".header-menu-toggle, .action-menu-toggle");
   if (toggle) {
     toggle.setAttribute("aria-expanded", "false");
+    if (restoreFocus) {
+      toggle.focus();
+    }
   }
 }
 
 actionMenus.forEach((menu) => {
   const toggle = menu.querySelector(".header-menu-toggle, .action-menu-toggle");
+  const dropdown = menu.querySelector(".header-menu-dropdown, .action-menu-dropdown");
   const links = menu.querySelectorAll(".header-menu-dropdown a, .action-menu-dropdown a");
 
   if (!toggle) {
     return;
+  }
+
+  if (dropdown) {
+    if (!dropdown.id) {
+      dropdown.id = `action-menu-${Math.random().toString(36).slice(2, 10)}`;
+    }
+    toggle.setAttribute("aria-controls", dropdown.id);
+    toggle.setAttribute("aria-haspopup", "menu");
   }
 
   toggle.addEventListener("click", () => {
@@ -114,7 +126,11 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    actionMenus.forEach((menu) => closeActionMenu(menu));
+    actionMenus.forEach((menu) => {
+      if (menu.classList.contains("open")) {
+        closeActionMenu(menu, { restoreFocus: true });
+      }
+    });
   }
 });
 
